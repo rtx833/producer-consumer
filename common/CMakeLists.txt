@@ -1,5 +1,6 @@
 add_library(pc_common STATIC
     src/byte_size.cpp
+    src/checksum.cpp
     src/cli.cpp
 )
 target_include_directories(pc_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
