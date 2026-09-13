@@ -5,21 +5,28 @@
 
 namespace pc {
 
-void seal_packet(std::span<std::uint8_t> record, std::uint64_t sequence, std::int64_t timestamp_ns,
-                 const IChecksum& checksum) noexcept {
+void write_header(std::span<std::uint8_t> record, std::uint64_t sequence, std::int64_t timestamp_ns,
+                  ChecksumKind checksum_kind) noexcept {
     PacketHeader header{};
     header.magic = kPacketMagic;
     header.version = kPacketVersion;
-    header.checksum_kind = static_cast<std::uint8_t>(checksum.kind());
+    header.checksum_kind = static_cast<std::uint8_t>(checksum_kind);
     header.header_size = static_cast<std::uint16_t>(kHeaderSize);
     header.payload_size = static_cast<std::uint32_t>(record.size() - kHeaderSize);
     header.checksum = 0;
     header.sequence = sequence;
     header.timestamp_ns = timestamp_ns;
     std::memcpy(record.data(), &header, kHeaderSize);
+}
 
-    const std::uint32_t crc = checksum.compute(record);
-    std::memcpy(record.data() + offsetof(PacketHeader, checksum), &crc, sizeof crc);
+void patch_checksum(std::span<std::uint8_t> record, std::uint32_t checksum) noexcept {
+    std::memcpy(record.data() + offsetof(PacketHeader, checksum), &checksum, sizeof checksum);
+}
+
+void seal_packet(std::span<std::uint8_t> record, std::uint64_t sequence, std::int64_t timestamp_ns,
+                 const IChecksum& checksum) noexcept {
+    write_header(record, sequence, timestamp_ns, checksum.kind());
+    patch_checksum(record, checksum.compute(record));
 }
 
 PacketHeader read_header(std::span<const std::uint8_t> record) noexcept {

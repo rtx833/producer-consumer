@@ -30,6 +30,14 @@ static_assert(kHeaderSize == 32);
 static_assert(std::is_trivially_copyable_v<PacketHeader>);
 static_assert(std::is_standard_layout_v<PacketHeader>);
 
+// Writes the header of a packet with the checksum field left as zero.
+// Precondition: record.size() >= kHeaderSize.
+void write_header(std::span<std::uint8_t> record, std::uint64_t sequence, std::int64_t timestamp_ns,
+                  ChecksumKind checksum_kind) noexcept;
+
+// Stores a computed checksum into the header of a packet.
+void patch_checksum(std::span<std::uint8_t> record, std::uint32_t checksum) noexcept;
+
 // Fills in the header of a packet whose payload already occupies
 // record[kHeaderSize..] and stamps the checksum over the whole record.
 void seal_packet(std::span<std::uint8_t> record, std::uint64_t sequence, std::int64_t timestamp_ns,

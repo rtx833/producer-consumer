@@ -62,7 +62,7 @@ after a producer exits.
 ```
 $ ./build/release/producer/producer 4K
 [21:15:30] Keyboard: any key = pause/resume, q = quit
-[21:15:30] Checksum: crc32c (hardware), payload generator: random
+[21:15:30] Checksum: crc32c (hardware), payload generator: random (xoshiro256+ x8, AVX2)
 [21:15:30] Transport: shm:/pc-ring (64.00 MiB ring)
 [21:15:30] Packet: 32 B header + 4096 B payload = 4128 B
 [21:15:31] sent 519,324 pkt (2.00 GiB) | 519,323 pkt/s 2.00 GiB/s | ring   0% | RUNNING
@@ -310,8 +310,8 @@ common/include/pc/       shared library "pc_common"
   cli.hpp                CommandLine (declarative option parser), UsageError
   byte_size.hpp          parsing and formatting helpers
 producer/
-  payload_generator.hpp  IPayloadGenerator, RandomPayloadGenerator, SequentialPayloadGenerator
-  packet_builder.hpp     PacketBuilder (payload + header + checksum, in place)
+  payload_generator.hpp  IPayloadGenerator, RandomPayloadGenerator (SIMD xoshiro256+), SequentialPayloadGenerator
+  packet_builder.hpp     PacketBuilder (header + payload + checksum, in place, cache-sized chunks)
   rate_limiter.hpp       RateLimiter (--rate)
   producer_reporter.hpp  IProducerReporter, ConsoleProducerReporter
   producer_app.hpp       ProducerApp (the main loop)
@@ -337,37 +337,48 @@ counts header + payload bytes.
 
 ### CRC-32C, hardware (`--checksum crc32c`, the default)
 
-| Payload | Packets/s | Throughput | Latency avg / max | Packets in 30 s |
-|--------:|----------:|-----------:|------------------:|----------------:|
-| 16 B    | 4,398,000 | 201 MiB/s  | 33 µs / 6.0 ms    | 131,501,693 |
-| 64 B    | 3,775,000 | 346 MiB/s  | 2.3 µs / 712 µs   | 112,874,913 |
-| 256 B   | 3,097,000 | 851 MiB/s  | 0.9 µs / 1.0 ms   | 92,586,235 |
-| 1 KiB   | 1,308,000 | 1.29 GiB/s | 0.8 µs / 1.1 ms   | 39,095,090 |
-| 4 KiB   |   547,000 | 2.10 GiB/s | 1.2 µs / 753 µs   | 16,344,717 |
-| 16 KiB  |   156,000 | 2.39 GiB/s | 6.0 µs / 768 µs   | 4,672,948 |
-| 64 KiB  |    41,400 | 2.53 GiB/s | 59 µs / 856 µs    | 1,236,757 |
-| 256 KiB |    10,500 | 2.57 GiB/s | 89 µs / 774 µs    | 315,238 |
-| 512 KiB |     5,280 | 2.58 GiB/s | 130 µs / 970 µs   | 157,898 |
-| 1 MiB   |     2,570 | 2.51 GiB/s | 243 µs / 1.2 ms   | 76,979 |
-| 2 MiB   |     1,280 | 2.50 GiB/s | 473 µs / 1.5 ms   | 38,318 |
-| 4 MiB   |       633 | 2.48 GiB/s | 940 µs / 2.0 ms   | 18,955 |
+| Payload | Packets/s | Throughput | Latency avg / max | Packets/30s | Ring    |
+|--------:|----------:|-----------:|------------------:|------------:|--------:|
+| 16 B    | 3,782,000 | 173 MiB/s  | 22 µs / 4.3 ms    | 113,065,388 | 64 MiB  |
+| 64 B    | 4,006,000 | 367 MiB/s  | 4.8 µs / 1.7 ms   | 119,784,888 | 64 MiB  |
+| 256 B   | 4,530,000 | 1.21 GiB/s | 27 µs / 5.6 ms    | 135,431,129 | 64 MiB  |
+| 1 KiB   | 2,647,000 | 2.60 GiB/s | 1.3 µs / 537 µs   |  79,144,608 | 64 MiB  |
+| 4 KiB   |   823,000 | 3.17 GiB/s | 1.5 µs / 554 µs   |  24,619,941 | 64 MiB  |
+| 16 KiB  |   246,000 | 3.76 GiB/s | 4.8 µs / 1.1 ms   |   7,359,518 | 64 MiB  |
+| 64 KiB  |    62,400 | 3.81 GiB/s | 28 µs / 1.1 ms    |   1,866,291 | 64 MiB  |
+| 256 KiB |    15,700 | 3.83 GiB/s | 113 µs / 802 µs   |     469,035 | 64 MiB  |
+| 512 KiB |     7,860 | 3.84 GiB/s | 176 µs / 1.4 ms   |     235,116 | 64 MiB  |
+| 1 MiB   |     3,960 | 3.87 GiB/s | 301 µs / 2.4 ms   |     118,341 | 64 MiB  |
+| 2 MiB   |     1,970 | 3.86 GiB/s | 567 µs / 4.1 ms   |      59,038 | 64 MiB  |
+| 4 MiB   |       989 | 3.86 GiB/s | 1.1 ms / 6.3 ms   |      29,577 | 64 MiB  |
+| 8 MiB   |       496 | 3.88 GiB/s | 2.1 ms / 9.2 ms   |      14,847 | 64 MiB  |
+| 16 MiB  |       249 | 3.89 GiB/s | 4.3 ms / 14.9 ms  |       7,453 | 64 MiB  |
+| 32 MiB  |        65 | 2.04 GiB/s | 8.9 ms / 34.8 ms  |       1,949 | 64 MiB  |
+| 8 MiB   |       493 | 3.86 GiB/s | 2.2 ms / 10.7 ms  |      14,770 | 256 MiB |
+| 16 MiB  |       245 | 3.84 GiB/s | 4.4 ms / 18.2 ms  |       7,339 | 256 MiB |
+| 32 MiB  |       123 | 3.85 GiB/s | 8.5 ms / 35.8 ms  |       3,687 | 256 MiB |
+
+A 32 MiB packet is the only one that fits into the default 64 MiB ring, so
+the producer and the consumer take turns instead of overlapping and the
+throughput halves; with a 256 MiB ring (`--ring-size 256M`) it is back on the
+plateau. The ring should hold at least two or three packets.
 
 ### CRC-32, software slice-by-8 (`--checksum crc32`)
 
-| Payload | Packets/s | Throughput | Latency avg / max | Packets in 30 s |
-|--------:|----------:|-----------:|------------------:|----------------:|
-| 16 B    | 3,415,000 | 156 MiB/s  | 7.3 µs / 1.9 ms   | 102,124,249 |
-| 64 B    | 3,690,000 | 338 MiB/s  | 22 µs / 6.0 ms    | 110,323,450 |
-| 256 B   | 2,238,000 | 615 MiB/s  | 0.9 µs / 625 µs   | 66,900,226 |
-| 1 KiB   |   851,000 | 857 MiB/s  | 1.6 µs / 848 µs   | 25,450,617 |
-| 4 KiB   |   262,000 | 1.01 GiB/s | 3.2 µs / 1.1 ms   | 7,827,080 |
-| 16 KiB  |    74,500 | 1.14 GiB/s | 11 µs / 3.0 ms    | 2,226,111 |
-| 64 KiB  |    19,500 | 1.19 GiB/s | 86 µs / 824 µs    | 583,577 |
-| 256 KiB |     4,920 | 1.20 GiB/s | 198 µs / 2.0 ms   | 147,119 |
-| 512 KiB |     2,460 | 1.20 GiB/s | 347 µs / 1.0 ms   | 73,645 |
-| 1 MiB   |     1,210 | 1.18 GiB/s | 684 µs / 3.3 ms   | 36,139 |
-| 2 MiB   |       595 | 1.16 GiB/s | 1.4 ms / 4.4 ms   | 17,813 |
-| 4 MiB   |       295 | 1.15 GiB/s | 2.7 ms / 5.9 ms   | 8,830 |
+| Payload | Packets/s | Throughput | Latency avg / max | Packets/30s |
+|--------:|----------:|-----------:|------------------:|------------:|
+| 16 B    | 3,702,000 | 169 MiB/s  | 35 µs / 6.2 ms    | 110,677,228 |
+| 64 B    | 4,659,000 | 427 MiB/s  | 51 µs / 7.1 ms    | 139,294,088 |
+| 256 B   | 2,859,000 | 785 MiB/s  | 83 µs / 9.1 ms    | 85,470,872 |
+| 1 KiB   | 1,082,000 | 1.06 GiB/s | 240 µs / 5.7 ms   | 32,343,580 |
+| 4 KiB   |   324,000 | 1.25 GiB/s | 9.5 µs / 3.6 ms   | 9,688,785 |
+| 16 KiB  |    87,500 | 1.34 GiB/s | 14 µs / 1.9 ms    | 2,615,873 |
+| 64 KiB  |    22,400 | 1.37 GiB/s | 62 µs / 6.0 ms    | 670,009 |
+| 256 KiB |     5,640 | 1.38 GiB/s | 230 µs / 2.5 ms   | 168,659 |
+| 512 KiB |     2,820 | 1.38 GiB/s | 408 µs / 4.9 ms   | 84,274 |
+| 1 MiB   |     1,410 | 1.38 GiB/s | 763 µs / 5.2 ms   | 42,251 |
+| 2 MiB   |       703 | 1.37 GiB/s | 1.5 ms / 7.2 ms   | 21,033 |
+| 4 MiB   |       350 | 1.37 GiB/s | 2.9 ms / 9.4 ms   | 10,485 |
 
 Every run ended with all packets valid: 0 corrupted, 0 missing, 0 rewinds,
 0 timestamp anomalies. Latency is measured from the producer's timestamp to
@@ -376,13 +387,16 @@ it includes generating, hashing and verifying the payload.
 
 Small packets are bound by per-packet overhead (about 200 ns across both
 processes), so the checksum makes little difference there. Large packets are
-bound by per-byte work: with the software CRC-32 (1.6 GiB/s per core) the
-stream plateaus at about 1.2 GiB/s; the CRC-32C instruction (6 GiB/s per
-core) lifts that to about 2.5 GiB/s, where the producer becomes bound by
-generating random payload bytes (the cheaper sequential generator reaches
-3.5 GiB/s). The ring stays nearly empty (`ring 0%`) because the consumer
-keeps up. Ring size has little effect; pinning both processes to the same
-CPU core roughly halves the throughput.
+bound by per-byte work on the producer: payload generation (the SIMD
+xoshiro256+ generator runs at about 20 GiB/s, the sequential one at 26 GiB/s),
+the checksum (6 GiB/s per core for the CRC-32C instruction, 1.6 GiB/s for the
+slice-by-8 CRC-32 table), and writing the bytes into shared memory. With the
+hardware CRC-32C the stream plateaus at about 3.85 GiB/s, with the software
+CRC-32 at about 1.4 GiB/s. Generating and hashing the payload in 8 KiB
+chunks, so that the checksum reads each chunk while it is still in the L1
+cache, is worth about 9% on large packets. The ring stays nearly empty
+(`ring 0%`) because the consumer keeps up. Ring size has little effect;
+pinning both processes to the same CPU core roughly halves the throughput.
 
 ## Limitations and assumptions
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -16,16 +17,26 @@ public:
     [[nodiscard]] virtual std::string_view name() const noexcept = 0;
 };
 
-// Pseudo-random bytes from a SplitMix64 generator (fast, 8 bytes per step).
+// Pseudo-random bytes from eight independent xoshiro256+ generators stepped
+// in lock-step. The state is laid out lane-wise (structure of arrays), so the
+// per-lane loop vectorises: every step produces 64 bytes with a handful of
+// SIMD shifts, xors and adds and no multiplications. On x86 an AVX2 build of
+// the same loop is selected at run time when the CPU supports it.
 class RandomPayloadGenerator final : public IPayloadGenerator {
 public:
-    explicit RandomPayloadGenerator(std::uint64_t seed) noexcept : state_(seed) {}
+    static constexpr std::size_t kLanes = 8;
+
+    explicit RandomPayloadGenerator(std::uint64_t seed) noexcept;
     void fill(std::span<std::uint8_t> payload) noexcept override;
-    [[nodiscard]] std::string_view name() const noexcept override { return "random"; }
+    [[nodiscard]] std::string_view name() const noexcept override;
+
+    struct State {
+        std::uint64_t s[4][kLanes];
+    };
 
 private:
-    std::uint64_t next() noexcept;
-    std::uint64_t state_;
+    State state_;
+    bool avx2_;
 };
 
 // A byte counter that keeps running across packets: 0,1,2,...,255,0,1,...
