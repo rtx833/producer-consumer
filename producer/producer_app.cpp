@@ -24,6 +24,13 @@ int ProducerApp::run() {
                                record_size));
 
     const std::stop_token stop = control_.stop_token();
+    if (config_.wait_for_consumer) {
+        reporter_.info("Waiting for a consumer to attach...");
+        if (!sink_.wait_for_peer(stop)) {
+            return 0;
+        }
+        reporter_.info("Consumer attached");
+    }
 
     PeriodicTimer report_timer(config_.report_interval);
     RateWindow window;

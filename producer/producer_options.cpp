@@ -54,6 +54,7 @@ std::optional<ProducerOptions> parse_producer_options(int argc, char* const* arg
         .option("rate", 0, "pps", "Packets per second, 0 = as fast as possible", "0")
         .option("count", 'c', "n", "Stop after this many packets, 0 = unlimited", "0")
         .option("report-interval", 0, "ms", "Statistics report period in milliseconds", "1000")
+        .flag("wait-for-consumer", 'w', "Do not start until a consumer attaches")
         .flag("no-keyboard", 0, "Do not read keys from the terminal");
 
     const auto parsed = cli.parse(argc, argv);
@@ -90,6 +91,7 @@ std::optional<ProducerOptions> parse_producer_options(int argc, char* const* arg
     }
     options.report_interval = std::chrono::milliseconds(interval);
     options.keyboard = !parsed.given("no-keyboard");
+    options.wait_for_consumer = parsed.given("wait-for-consumer");
     return options;
 }
 

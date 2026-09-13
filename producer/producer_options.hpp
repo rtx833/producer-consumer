@@ -19,6 +19,7 @@ struct ProducerOptions {
     std::uint64_t count = 0;
     std::chrono::milliseconds report_interval{1000};
     bool keyboard = true;
+    bool wait_for_consumer = false;
 };
 
 // Parses the command line. Prints help to `out` and returns nullopt for

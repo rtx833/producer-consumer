@@ -45,6 +45,7 @@ int main(int argc, char* argv[]) {
         config.payload_size = options->payload_size;
         config.max_packets = options->count;
         config.report_interval = options->report_interval;
+        config.wait_for_consumer = options->wait_for_consumer;
 
         reporter.info(keyboard ? "Keyboard: any key = pause/resume, q = quit"
                                : "Keyboard: not available (stdin is not an interactive terminal)");

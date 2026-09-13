@@ -17,6 +17,7 @@ struct ProducerConfig {
     std::uint64_t max_packets = 0;  // 0 = unlimited
     std::chrono::milliseconds report_interval{1000};
     std::chrono::milliseconds reserve_timeout{50};
+    bool wait_for_consumer = false;
 };
 
 // Main loop of the producer: builds packets into the sink at the configured
