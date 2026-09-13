@@ -25,3 +25,8 @@ add_test(NAME integration
         bash ${CMAKE_CURRENT_SOURCE_DIR}/integration.sh
 )
 set_tests_properties(integration PROPERTIES TIMEOUT 180)
+
+# Aggregate target used by build.sh: everything CTest needs.
+add_custom_target(pc_tests
+    DEPENDS test_crc32 test_ring_buffer test_cli test_packet_validator producer consumer
+)

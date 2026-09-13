@@ -21,17 +21,28 @@ libraries are used; the inter-process transport is implemented from scratch.
 Requirements: a POSIX system, CMake ≥ 3.16, and a compiler with C++20 and
 `<format>` support (GCC ≥ 13, or Clang ≥ 17 with libc++ ≥ 17 / libstdc++ ≥ 13).
 
+The `build.sh` wrapper configures and builds with CMake:
+
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
-ctest --test-dir build --output-on-failure      # unit tests + end-to-end test
+./build.sh all                    # release build of both applications and the tests
+./build.sh -d producer consumer   # debug build of the applications only
+./build.sh --help                 # targets: producer | consumer | tests | all; -r/--release (default), -d/--debug
+ctest --test-dir build/release --output-on-failure   # unit tests + end-to-end test
 ```
 
-Options: `-DPC_BUILD_TESTS=OFF` skips the tests, `-DPC_SANITIZE=ON` builds
-with AddressSanitizer and UndefinedBehaviorSanitizer (the whole suite,
+Release builds land in `build/release`, debug builds in `build/debug`. The
+equivalent plain CMake invocation is:
+
+```sh
+cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
+cmake --build build/release -j
+```
+
+CMake options: `-DPC_BUILD_TESTS=OFF` skips the tests, `-DPC_SANITIZE=ON`
+builds with AddressSanitizer and UndefinedBehaviorSanitizer (the whole suite,
 including the end-to-end test, passes under both).
 
-Binaries: `build/producer/producer` and `build/consumer/consumer`.
+Binaries: `build/release/producer/producer` and `build/release/consumer/consumer`.
 
 ## Usage
 
@@ -41,14 +52,14 @@ after a producer exits.
 
 ```sh
 # terminal 1
-./build/consumer/consumer
+./build/release/consumer/consumer
 
 # terminal 2: 4 KiB payload per packet, as fast as possible
-./build/producer/producer 4K
+./build/release/producer/producer 4K
 ```
 
 ```
-$ ./build/producer/producer 4K
+$ ./build/release/producer/producer 4K
 [16:31:07] Keyboard: any key = pause/resume, q = quit
 [16:31:07] Transport: shm:/pc-ring (64.00 MiB ring)
 [16:31:07] Packet: 32 B header + 4096 B payload = 4128 B
@@ -58,7 +69,7 @@ $ ./build/producer/producer 4K
 ```
 
 ```
-$ ./build/consumer/consumer --once
+$ ./build/release/consumer/consumer --once
 [16:31:07] Keyboard: any key = pause/resume, q = quit
 [16:31:07] Pause policy 'block': packets queue up in the ring; the producer blocks when it is full; nothing is lost
 [16:31:07] Waiting for a producer on shm:/pc-ring ...
