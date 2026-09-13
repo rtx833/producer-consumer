@@ -26,6 +26,7 @@ endif()
 find_package(Threads REQUIRED)
 
 add_subdirectory(common)
+add_subdirectory(producer)
 
 if(PC_BUILD_TESTS)
     enable_testing()
