@@ -15,6 +15,7 @@ struct ProducerOptions {
     std::size_t ring_size = 0;
     std::string generator;
     std::uint64_t seed = 0;
+    double rate = 0.0;
     std::uint64_t count = 0;
     std::chrono::milliseconds report_interval{1000};
     bool keyboard = true;

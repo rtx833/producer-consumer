@@ -17,6 +17,7 @@
 #include "producer_app.hpp"
 #include "producer_options.hpp"
 #include "producer_reporter.hpp"
+#include "rate_limiter.hpp"
 
 int main(int argc, char* argv[]) {
     using namespace pc;
@@ -37,6 +38,7 @@ int main(int argc, char* argv[]) {
         const auto generator = make_payload_generator(options->generator, options->seed);
         PacketBuilder builder(*generator, checksum);
         ShmPacketSink sink(options->shm_name, options->ring_size);
+        RateLimiter limiter(options->rate);
         ConsoleProducerReporter reporter(std::cout);
 
         ProducerConfig config;
@@ -46,7 +48,7 @@ int main(int argc, char* argv[]) {
 
         reporter.info(keyboard ? "Keyboard: any key = pause/resume, q = quit"
                                : "Keyboard: not available (stdin is not an interactive terminal)");
-        ProducerApp app(config, sink, builder, control, reporter);
+        ProducerApp app(config, sink, builder, limiter, control, reporter);
         return app.run();
     } catch (const UsageError& error) {
         std::cerr << "producer: " << error.what() << "\nTry 'producer --help' for usage.\n";

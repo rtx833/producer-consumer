@@ -8,6 +8,7 @@
 #include "pc/control.hpp"
 #include "pc/transport.hpp"
 #include "producer_reporter.hpp"
+#include "rate_limiter.hpp"
 
 namespace pc {
 
@@ -22,8 +23,8 @@ struct ProducerConfig {
 // pace, honours pause/stop requests and reports progress periodically.
 class ProducerApp {
 public:
-    ProducerApp(ProducerConfig config, IPacketSink& sink, PacketBuilder& builder, RunControl& control,
-                IProducerReporter& reporter) noexcept;
+    ProducerApp(ProducerConfig config, IPacketSink& sink, PacketBuilder& builder, RateLimiter& limiter,
+                RunControl& control, IProducerReporter& reporter) noexcept;
 
     int run();
 
@@ -31,6 +32,7 @@ private:
     ProducerConfig config_;
     IPacketSink& sink_;
     PacketBuilder& builder_;
+    RateLimiter& limiter_;
     RunControl& control_;
     IProducerReporter& reporter_;
 };

@@ -5,6 +5,7 @@ add_executable(producer
     producer_app.cpp
     producer_options.cpp
     producer_reporter.cpp
+    rate_limiter.cpp
 )
 target_include_directories(producer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(producer PRIVATE pc_common pc_warnings)

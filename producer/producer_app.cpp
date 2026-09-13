@@ -9,9 +9,9 @@
 
 namespace pc {
 
-ProducerApp::ProducerApp(ProducerConfig config, IPacketSink& sink, PacketBuilder& builder, RunControl& control,
-                         IProducerReporter& reporter) noexcept
-    : config_(config), sink_(sink), builder_(builder), control_(control), reporter_(reporter) {}
+ProducerApp::ProducerApp(ProducerConfig config, IPacketSink& sink, PacketBuilder& builder, RateLimiter& limiter,
+                         RunControl& control, IProducerReporter& reporter) noexcept
+    : config_(config), sink_(sink), builder_(builder), limiter_(limiter), control_(control), reporter_(reporter) {}
 
 int ProducerApp::run() {
     const std::size_t record_size = kHeaderSize + config_.payload_size;
@@ -53,6 +53,7 @@ int ProducerApp::run() {
             continue;
         }
 
+        limiter_.wait_for_slot(stop);
         const auto slot = sink_.reserve(record_size, config_.reserve_timeout, stop);
         if (!slot) {
             report_if_due();  // queue full (consumer slow or paused) or stop requested

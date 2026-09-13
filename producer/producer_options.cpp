@@ -1,5 +1,6 @@
 #include "producer_options.hpp"
 
+#include <charconv>
 #include <format>
 
 #include "pc/byte_size.hpp"
@@ -27,6 +28,16 @@ std::uint64_t uint_option(const CommandLine::Parsed& parsed, std::string_view na
     return *value;
 }
 
+double double_option(const CommandLine::Parsed& parsed, std::string_view name) {
+    const auto text = parsed.value(name).value_or("");
+    double value = 0.0;
+    const auto [ptr, ec] = std::from_chars(text.data(), text.data() + text.size(), value);
+    if (ec != std::errc{} || ptr != text.data() + text.size() || value < 0.0) {
+        throw UsageError(std::format("--{}: '{}' is not a non-negative number", name, text));
+    }
+    return value;
+}
+
 }  // namespace
 
 std::optional<ProducerOptions> parse_producer_options(int argc, char* const* argv, std::ostream& out) {
@@ -40,6 +51,7 @@ std::optional<ProducerOptions> parse_producer_options(int argc, char* const* arg
         .option("ring-size", 'r', "bytes", "Ring buffer capacity (rounded up to a power of two)", "64M")
         .option("generator", 'g', "kind", "Payload generator: random | sequential", "random")
         .option("seed", 0, "n", "Seed for the random generator", "1")
+        .option("rate", 0, "pps", "Packets per second, 0 = as fast as possible", "0")
         .option("count", 'c', "n", "Stop after this many packets, 0 = unlimited", "0")
         .option("report-interval", 0, "ms", "Statistics report period in milliseconds", "1000")
         .flag("no-keyboard", 0, "Do not read keys from the terminal");
@@ -70,6 +82,7 @@ std::optional<ProducerOptions> parse_producer_options(int argc, char* const* arg
     options.ring_size = static_cast<std::size_t>(byte_size_option(parsed, "ring-size"));
     options.generator = parsed.value("generator").value_or("random");
     options.seed = uint_option(parsed, "seed");
+    options.rate = double_option(parsed, "rate");
     options.count = uint_option(parsed, "count");
     const auto interval = uint_option(parsed, "report-interval");
     if (interval == 0) {
