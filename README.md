@@ -315,24 +315,33 @@ tests/                   unit tests (CRC, ring buffer, validator, CLI) and integ
 ## Measurements
 
 Release build, both processes on one machine (16-core Linux laptop, GCC 13.3,
-4 s runs, 64 MiB ring, random payload):
+30 s runs, 64 MiB ring, random payload; reproducible with `scripts/bench.sh`):
 
-| Payload | Packets/s | Throughput | Latency avg / max | Packets in 4 s |
-|--------:|----------:|-----------:|------------------:|---------------:|
-| 64 B    | 3,950,000 | 362 MiB/s  | 10 µs / 418 µs    | 15,399,629 |
-| 1 KiB   |   847,000 | 853 MiB/s  | 1.3 µs / 132 µs   | 3,303,100 |
-| 4 KiB   |   262,000 | 1.01 GiB/s | 3.9 µs / 166 µs   | 1,023,618 |
-| 64 KiB  |    19,300 | 1.18 GiB/s | 86 µs / 222 µs    | 75,089 |
-| 1 MiB   |     1,190 | 1.16 GiB/s | 683 µs / 874 µs   | 4,629 |
+| Payload | Packets/s | Throughput | Latency avg / max | Packets in 30 s |
+|--------:|----------:|-----------:|------------------:|----------------:|
+| 16 B    | 3,415,000 | 156 MiB/s  | 7.3 µs / 1.9 ms   | 102,124,249 |
+| 64 B    | 3,690,000 | 338 MiB/s  | 22 µs / 6.0 ms    | 110,323,450 |
+| 256 B   | 2,238,000 | 615 MiB/s  | 0.9 µs / 625 µs   | 66,900,226 |
+| 1 KiB   |   851,000 | 857 MiB/s  | 1.6 µs / 848 µs   | 25,450,617 |
+| 4 KiB   |   262,000 | 1.01 GiB/s | 3.2 µs / 1.1 ms   | 7,827,080 |
+| 16 KiB  |    74,500 | 1.14 GiB/s | 11 µs / 3.0 ms    | 2,226,111 |
+| 64 KiB  |    19,500 | 1.19 GiB/s | 86 µs / 824 µs    | 583,577 |
+| 256 KiB |     4,920 | 1.20 GiB/s | 198 µs / 2.0 ms   | 147,119 |
+| 512 KiB |     2,460 | 1.20 GiB/s | 347 µs / 1.0 ms   | 73,645 |
+| 1 MiB   |     1,210 | 1.18 GiB/s | 684 µs / 3.3 ms   | 36,139 |
+| 2 MiB   |       595 | 1.16 GiB/s | 1.4 ms / 4.4 ms   | 17,813 |
+| 4 MiB   |       295 | 1.15 GiB/s | 2.7 ms / 5.9 ms   | 8,830 |
 
 Every run ended with all packets valid: 0 corrupted, 0 missing, 0 rewinds,
 0 timestamp anomalies. Latency is measured from the producer's timestamp to
 the moment the consumer finished validating the packet, so for large packets
 it includes generating, hashing and verifying the payload.
 
-Throughput is bounded by the CRC-32 computation on each side, not by the
-transport; the ring itself moves data at memory-copy speed and stays nearly
-empty (`ring 0%`) because the consumer keeps up.
+Small packets are bound by per-packet overhead (about 200 ns across both
+processes); large packets are bound by the CRC-32 computation (1.6 GiB/s per
+core here), not by the transport. The ring stays nearly empty (`ring 0%`)
+because the consumer keeps up. Ring size has little effect; pinning both
+processes to the same CPU core roughly halves the throughput.
 
 ## Limitations and assumptions
 
