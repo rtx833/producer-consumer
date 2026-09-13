@@ -2,10 +2,13 @@ add_library(pc_common STATIC
     src/byte_size.cpp
     src/checksum.cpp
     src/cli.cpp
+    src/keyboard_source.cpp
     src/packet.cpp
     src/ring_buffer.cpp
     src/shm_region.cpp
     src/shm_transport.cpp
+    src/signal_source.cpp
+    src/stats.cpp
 )
 target_include_directories(pc_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(pc_common
