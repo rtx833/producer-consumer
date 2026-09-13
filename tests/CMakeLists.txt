@@ -9,7 +9,12 @@ function(pc_add_unit_test name)
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
+add_library(pc_consumer_lib OBJECT ${CMAKE_SOURCE_DIR}/consumer/packet_validator.cpp)
+target_include_directories(pc_consumer_lib PRIVATE ${CMAKE_SOURCE_DIR}/consumer)
+target_link_libraries(pc_consumer_lib PRIVATE pc_common pc_warnings)
+
 pc_add_unit_test(test_crc32)
 pc_add_unit_test(test_ring_buffer)
 pc_add_unit_test(test_cli)
+pc_add_unit_test(test_packet_validator pc_consumer_lib)
 

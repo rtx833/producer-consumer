@@ -27,6 +27,7 @@ find_package(Threads REQUIRED)
 
 add_subdirectory(common)
 add_subdirectory(producer)
+add_subdirectory(consumer)
 
 if(PC_BUILD_TESTS)
     enable_testing()
