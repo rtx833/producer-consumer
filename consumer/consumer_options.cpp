@@ -27,6 +27,9 @@ std::optional<ConsumerOptions> parse_consumer_options(int argc, char* const* arg
                     "Any key toggles pause; 'q' or Ctrl-C quits.\n"
                     "Signals: SIGUSR1 pause, SIGUSR2 resume, SIGINT/SIGTERM stop.");
     cli.option("shm-name", 'n', "name", "POSIX shared memory object name", kDefaultShmName)
+        .option("pause-policy", 'p', "policy",
+                "What happens while paused: block (producer blocks, nothing lost) | discard (drop packets)",
+                "block")
         .option("report-interval", 0, "ms", "Statistics report period in milliseconds", "1000")
         .option("log-defects", 0, "n", "Print details for at most n defective packets per session", "10")
         .flag("once", '1', "Exit when the producer finishes instead of waiting for the next one")
@@ -40,6 +43,7 @@ std::optional<ConsumerOptions> parse_consumer_options(int argc, char* const* arg
 
     ConsumerOptions options;
     options.shm_name = parsed.value("shm-name").value_or(kDefaultShmName);
+    options.pause_policy = parsed.value("pause-policy").value_or("block");
     const auto interval = uint_option(parsed, "report-interval");
     if (interval == 0) {
         throw UsageError("--report-interval must be positive");

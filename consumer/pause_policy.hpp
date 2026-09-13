@@ -35,4 +35,21 @@ public:
     void on_resume(IPacketValidator& validator) override;
 };
 
+// Keeps reading and throws packets away so the producer never blocks. The
+// dropped packets are counted; the sequence baseline is re-established after
+// resume so the intentional gap is not reported as a defect.
+class DiscardingPausePolicy final : public IPausePolicy {
+public:
+    [[nodiscard]] std::string_view name() const noexcept override { return "discard"; }
+    [[nodiscard]] std::string_view description() const noexcept override {
+        return "packets are read and discarded; the producer keeps running; drops are counted";
+    }
+    void while_paused(IPacketSource& source, ConsumerStats& stats, std::stop_token stop) override;
+    void on_resume(IPacketValidator& validator) override;
+};
+
+// Factory used by the composition root; throws std::invalid_argument for
+// unknown names. Registered names: "block", "discard".
+std::unique_ptr<IPausePolicy> make_pause_policy(std::string_view name);
+
 }  // namespace pc

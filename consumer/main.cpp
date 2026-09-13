@@ -35,7 +35,7 @@ int main(int argc, char* argv[]) {
 
         const Crc32 checksum;
         PacketValidator validator(checksum);
-        BlockingPausePolicy policy;
+        const auto policy = make_pause_policy(options->pause_policy);
         ShmPacketSource source(options->shm_name);
         ConsoleConsumerReporter reporter(std::cout);
 
@@ -46,7 +46,7 @@ int main(int argc, char* argv[]) {
 
         reporter.info(keyboard ? "Keyboard: any key = pause/resume, q = quit"
                                : "Keyboard: not available (stdin is not an interactive terminal)");
-        ConsumerApp app(config, source, validator, policy, control, reporter);
+        ConsumerApp app(config, source, validator, *policy, control, reporter);
         return app.run();
     } catch (const UsageError& error) {
         std::cerr << "consumer: " << error.what() << "\nTry 'consumer --help' for usage.\n";

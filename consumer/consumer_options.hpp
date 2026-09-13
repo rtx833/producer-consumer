@@ -9,6 +9,7 @@ namespace pc {
 
 struct ConsumerOptions {
     std::string shm_name;
+    std::string pause_policy;
     std::chrono::milliseconds report_interval{1000};
     unsigned max_defect_logs = 10;
     bool keyboard = true;
