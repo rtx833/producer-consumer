@@ -19,13 +19,14 @@ enum class Defect : unsigned {
     SequenceRewind = 1u << 6,     // duplicate or out-of-order sequence number
     TimestampFuture = 1u << 7,    // timestamp ahead of the local clock beyond tolerance
     TimestampBackward = 1u << 8,  // timestamp earlier than the previous packet's
+    UnknownChecksum = 1u << 9,    // header names a checksum algorithm this build does not know
 };
 
 // Defects that mean the packet content cannot be trusted at all.
 inline constexpr unsigned kCorruptionDefects =
     static_cast<unsigned>(Defect::BadMagic) | static_cast<unsigned>(Defect::BadVersion) |
     static_cast<unsigned>(Defect::BadHeaderSize) | static_cast<unsigned>(Defect::SizeMismatch) |
-    static_cast<unsigned>(Defect::BadChecksum);
+    static_cast<unsigned>(Defect::BadChecksum) | static_cast<unsigned>(Defect::UnknownChecksum);
 
 struct ValidationResult {
     unsigned defects = 0;
@@ -50,17 +51,18 @@ public:
     virtual void resync() noexcept = 0;
 };
 
-// Checks structure, checksum, sequence continuity and timestamp sanity.
+// Checks structure, checksum, sequence continuity and timestamp sanity. The
+// checksum algorithm is taken from each packet's header.
 class PacketValidator final : public IPacketValidator {
 public:
-    explicit PacketValidator(const IChecksum& checksum,
+    explicit PacketValidator(const IChecksumRegistry& checksums,
                              std::chrono::nanoseconds future_tolerance = std::chrono::seconds(1)) noexcept;
 
     [[nodiscard]] ValidationResult validate(std::span<const std::uint8_t> record, std::int64_t now_ns) override;
     void resync() noexcept override { has_baseline_ = false; }
 
 private:
-    const IChecksum& checksum_;
+    const IChecksumRegistry& checksums_;
     std::int64_t future_tolerance_ns_;
     bool has_baseline_ = false;
     std::uint64_t expected_sequence_ = 0;

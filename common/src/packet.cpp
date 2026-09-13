@@ -10,6 +10,7 @@ void seal_packet(std::span<std::uint8_t> record, std::uint64_t sequence, std::in
     PacketHeader header{};
     header.magic = kPacketMagic;
     header.version = kPacketVersion;
+    header.checksum_kind = static_cast<std::uint8_t>(checksum.kind());
     header.header_size = static_cast<std::uint16_t>(kHeaderSize);
     header.payload_size = static_cast<std::uint32_t>(record.size() - kHeaderSize);
     header.checksum = 0;

@@ -10,13 +10,14 @@
 namespace pc {
 
 inline constexpr std::uint32_t kPacketMagic = 0x544B4350u;  // "PCKT" when read as little-endian bytes
-inline constexpr std::uint16_t kPacketVersion = 1;
+inline constexpr std::uint8_t kPacketVersion = 2;
 
 // Fixed-size metadata that precedes every payload. Both processes run on the
 // same host, so native byte order and layout are used deliberately.
 struct PacketHeader {
     std::uint32_t magic;
-    std::uint16_t version;
+    std::uint8_t version;
+    std::uint8_t checksum_kind;  // ChecksumKind used for `checksum`
     std::uint16_t header_size;
     std::uint32_t payload_size;
     std::uint32_t checksum;      // CRC over the whole packet with this field set to zero

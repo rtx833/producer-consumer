@@ -3,6 +3,7 @@
 #include <unistd.h>
 
 #include <exception>
+#include <format>
 #include <iostream>
 #include <memory>
 
@@ -33,8 +34,8 @@ int main(int argc, char* argv[]) {
             keyboard = std::make_unique<KeyboardControlSource>(control, STDIN_FILENO);
         }
 
-        const Crc32 checksum;
-        PacketValidator validator(checksum);
+        const ChecksumRegistry checksums;
+        PacketValidator validator(checksums);
         const auto policy = make_pause_policy(options->pause_policy);
         ShmPacketSource source(options->shm_name);
         ConsoleConsumerReporter reporter(std::cout);
@@ -46,6 +47,8 @@ int main(int argc, char* argv[]) {
 
         reporter.info(keyboard ? "Keyboard: any key = pause/resume, q = quit"
                                : "Keyboard: not available (stdin is not an interactive terminal)");
+        reporter.info(std::format("Checksums: crc32 (software), crc32c ({})",
+                                  Crc32c::hardware_available() ? "hardware" : "software"));
         ConsumerApp app(config, source, validator, *policy, control, reporter);
         return app.run();
     } catch (const UsageError& error) {

@@ -50,6 +50,7 @@ std::optional<ProducerOptions> parse_producer_options(int argc, char* const* arg
         .option("shm-name", 'n', "name", "POSIX shared memory object name", kDefaultShmName)
         .option("ring-size", 'r', "bytes", "Ring buffer capacity (rounded up to a power of two)", "64M")
         .option("generator", 'g', "kind", "Payload generator: random | sequential", "random")
+        .option("checksum", 'k', "algo", "Checksum: crc32c (CPU-accelerated where available) | crc32", "crc32c")
         .option("seed", 0, "n", "Seed for the random generator", "1")
         .option("rate", 0, "pps", "Packets per second, 0 = as fast as possible", "0")
         .option("count", 'c', "n", "Stop after this many packets, 0 = unlimited", "0")
@@ -82,6 +83,7 @@ std::optional<ProducerOptions> parse_producer_options(int argc, char* const* arg
     options.shm_name = parsed.value("shm-name").value_or(kDefaultShmName);
     options.ring_size = static_cast<std::size_t>(byte_size_option(parsed, "ring-size"));
     options.generator = parsed.value("generator").value_or("random");
+    options.checksum = parsed.value("checksum").value_or("crc32c");
     options.seed = uint_option(parsed, "seed");
     options.rate = double_option(parsed, "rate");
     options.count = uint_option(parsed, "count");

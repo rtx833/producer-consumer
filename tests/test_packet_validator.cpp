@@ -1,4 +1,6 @@
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 #include "check.hpp"
@@ -23,7 +25,8 @@ std::vector<std::uint8_t> make_packet(std::uint64_t sequence, std::int64_t times
 int main() {
     using pc::Defect;
     const pc::Crc32 crc;
-    pc::PacketValidator validator(crc, std::chrono::seconds(1));
+    const pc::ChecksumRegistry registry;
+    pc::PacketValidator validator(registry, std::chrono::seconds(1));
     const std::int64_t base_ns = 1'700'000'000'000'000'000;
 
     // A well-formed packet establishes the baseline and is clean.
@@ -90,9 +93,26 @@ int main() {
     packet = make_packet(1000, base_ns + 8'000, 8, crc);
     CHECK(validator.validate(packet, base_ns + 9'000).clean());
 
-    // Zero-length payload is a valid packet.
-    packet = make_packet(1001, base_ns + 9'000, 0, crc);
+    // A packet sealed with CRC-32C is verified with CRC-32C, chosen from its header.
+    const pc::Crc32c crc32c;
+    packet = make_packet(1001, base_ns + 9'000, 64, crc32c);
+    CHECK(pc::read_header(packet).checksum_kind == static_cast<std::uint8_t>(pc::ChecksumKind::Crc32c));
     CHECK(validator.validate(packet, base_ns + 10'000).clean());
+
+    // An unknown checksum algorithm makes the packet untrustworthy even if
+    // the value itself is consistent.
+    packet = make_packet(1002, base_ns + 10'000, 64, crc);
+    packet[offsetof(pc::PacketHeader, checksum_kind)] = 200;
+    const std::uint32_t reseal = pc::packet_checksum(packet, crc);
+    std::memcpy(packet.data() + offsetof(pc::PacketHeader, checksum), &reseal, sizeof reseal);
+    result = validator.validate(packet, base_ns + 11'000);
+    CHECK(result.has(pc::Defect::UnknownChecksum));
+    CHECK(result.corrupted());
+    validator.resync();
+
+    // Zero-length payload is a valid packet.
+    packet = make_packet(1003, base_ns + 11'000, 0, crc);
+    CHECK(validator.validate(packet, base_ns + 12'000).clean());
 
     CHECK(pc::describe_defects(0) == "ok");
     CHECK(pc::describe_defects(static_cast<unsigned>(Defect::BadChecksum) |

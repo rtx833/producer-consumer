@@ -18,6 +18,7 @@ std::string describe_defects(unsigned defects) {
         {Defect::SequenceRewind, "sequence rewind"},
         {Defect::TimestampFuture, "timestamp in the future"},
         {Defect::TimestampBackward, "timestamp went backwards"},
+        {Defect::UnknownChecksum, "unknown checksum algorithm"},
     };
     std::string text;
     for (const auto& [defect, name] : kNames) {
@@ -31,8 +32,9 @@ std::string describe_defects(unsigned defects) {
     return text.empty() ? "ok" : text;
 }
 
-PacketValidator::PacketValidator(const IChecksum& checksum, std::chrono::nanoseconds future_tolerance) noexcept
-    : checksum_(checksum), future_tolerance_ns_(future_tolerance.count()) {}
+PacketValidator::PacketValidator(const IChecksumRegistry& checksums,
+                                 std::chrono::nanoseconds future_tolerance) noexcept
+    : checksums_(checksums), future_tolerance_ns_(future_tolerance.count()) {}
 
 ValidationResult PacketValidator::validate(std::span<const std::uint8_t> record, std::int64_t now_ns) {
     ValidationResult result;
@@ -55,8 +57,12 @@ ValidationResult PacketValidator::validate(std::span<const std::uint8_t> record,
     if (header.payload_size != record.size() - kHeaderSize) {
         result.defects |= static_cast<unsigned>(Defect::SizeMismatch);
     }
-    if (packet_checksum(record, checksum_) != header.checksum) {
-        result.defects |= static_cast<unsigned>(Defect::BadChecksum);
+    if (const IChecksum* checksum = checksums_.find(static_cast<ChecksumKind>(header.checksum_kind))) {
+        if (packet_checksum(record, *checksum) != header.checksum) {
+            result.defects |= static_cast<unsigned>(Defect::BadChecksum);
+        }
+    } else {
+        result.defects |= static_cast<unsigned>(Defect::UnknownChecksum);
     }
     if (result.corrupted()) {
         return result;  // metadata is not trustworthy; leave sequence tracking untouched

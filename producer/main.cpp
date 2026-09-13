@@ -3,6 +3,7 @@
 #include <unistd.h>
 
 #include <exception>
+#include <format>
 #include <iostream>
 #include <memory>
 
@@ -34,9 +35,9 @@ int main(int argc, char* argv[]) {
             keyboard = std::make_unique<KeyboardControlSource>(control, STDIN_FILENO);
         }
 
-        const Crc32 checksum;
+        const auto checksum = make_checksum(options->checksum);
         const auto generator = make_payload_generator(options->generator, options->seed);
-        PacketBuilder builder(*generator, checksum);
+        PacketBuilder builder(*generator, *checksum);
         ShmPacketSink sink(options->shm_name, options->ring_size);
         RateLimiter limiter(options->rate);
         ConsoleProducerReporter reporter(std::cout);
@@ -49,6 +50,7 @@ int main(int argc, char* argv[]) {
 
         reporter.info(keyboard ? "Keyboard: any key = pause/resume, q = quit"
                                : "Keyboard: not available (stdin is not an interactive terminal)");
+        reporter.info(std::format("Checksum: {}, payload generator: {}", checksum->name(), generator->name()));
         ProducerApp app(config, sink, builder, limiter, control, reporter);
         return app.run();
     } catch (const UsageError& error) {

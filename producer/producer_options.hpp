@@ -14,6 +14,7 @@ struct ProducerOptions {
     std::string shm_name;
     std::size_t ring_size = 0;
     std::string generator;
+    std::string checksum;
     std::uint64_t seed = 0;
     double rate = 0.0;
     std::uint64_t count = 0;

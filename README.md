@@ -5,7 +5,8 @@ process to another through a lock-free ring buffer in POSIX shared memory.
 
 * **`producer`** builds packets of a payload size given on the command line
   (random bytes or a byte sequence), stamps each with a sequence number, a
-  wall-clock timestamp and a CRC-32, and publishes it into the ring.
+  wall-clock timestamp and a checksum (CPU-accelerated CRC-32C, or CRC-32),
+  and publishes it into the ring.
 * **`consumer`** attaches to the ring, verifies every packet (structure,
   checksum, sequence continuity, timestamp sanity) and prints statistics once
   per second: totals, packets/s, bytes/s, end-to-end latency, ring fill level.
@@ -60,26 +61,28 @@ after a producer exits.
 
 ```
 $ ./build/release/producer/producer 4K
-[16:31:07] Keyboard: any key = pause/resume, q = quit
-[16:31:07] Transport: shm:/pc-ring (64.00 MiB ring)
-[16:31:07] Packet: 32 B header + 4096 B payload = 4128 B
-[16:31:08] sent 251,071 pkt (988.41 MiB) | 251,070 pkt/s 988.41 MiB/s | ring   0% | RUNNING
+[21:15:30] Keyboard: any key = pause/resume, q = quit
+[21:15:30] Checksum: crc32c (hardware), payload generator: random
+[21:15:30] Transport: shm:/pc-ring (64.00 MiB ring)
+[21:15:30] Packet: 32 B header + 4096 B payload = 4128 B
+[21:15:31] sent 519,324 pkt (2.00 GiB) | 519,323 pkt/s 2.00 GiB/s | ring   0% | RUNNING
 ...
-[16:31:11] done: 1,023,618 packets, 3.94 GiB in 3.90 s (avg 262,530 pkt/s, 1.01 GiB/s)
+[21:16:00] done: 16,344,717 packets, 62.84 GiB in 29.90 s (avg 546,657 pkt/s, 2.10 GiB/s)
 ```
 
 ```
 $ ./build/release/consumer/consumer --once
-[16:31:07] Keyboard: any key = pause/resume, q = quit
-[16:31:07] Pause policy 'block': packets queue up in the ring; the producer blocks when it is full; nothing is lost
-[16:31:07] Waiting for a producer on shm:/pc-ring ...
-[16:31:07] Connected to shm:/pc-ring (64.00 MiB ring, producer pid 19551)
-[16:31:08] rx 250,158 pkt (984.81 MiB) | 250,157 pkt/s 984.81 MiB/s | latency avg 8.2 us max 942.5 us | ring   0% | RUNNING
-[16:31:09] rx 513,792 pkt (1.98 GiB) | 263,633 pkt/s 1.01 GiB/s | latency avg 3.8 us max 165.5 us | ring   0% | RUNNING
+[21:15:30] Keyboard: any key = pause/resume, q = quit
+[21:15:30] Checksums: crc32 (software), crc32c (hardware)
+[21:15:30] Pause policy 'block': packets queue up in the ring; the producer blocks when it is full; nothing is lost
+[21:15:30] Waiting for a producer on shm:/pc-ring ...
+[21:15:30] Connected to shm:/pc-ring (64.00 MiB ring, producer pid 76824)
+[21:15:31] rx 517,447 pkt (1.99 GiB) | 517,445 pkt/s 1.99 GiB/s | latency avg 1.9 us max 695.7 us | ring   0% | RUNNING
+[21:15:32] rx 1,064,459 pkt (4.09 GiB) | 547,011 pkt/s 2.10 GiB/s | latency avg 1.2 us max 123.6 us | ring   0% | RUNNING
 ...
-[16:31:11] Producer finished the stream
-[16:31:11] session summary: received 1,023,618 packets (3.94 GiB) in 3.97 s, avg 257,891 pkt/s 1015.26 MiB/s
-[16:31:11]   valid 1,023,618 | corrupted 0 | sequence gaps 0 (missing 0) | rewinds 0 | timestamp anomalies 0 | dropped while paused 0 (0 B)
+[21:16:00] Producer finished the stream
+[21:16:00] session summary: received 16,344,717 packets (62.84 GiB) in 29.97 s, avg 545,386 pkt/s 2.10 GiB/s
+[21:16:00]   valid 16,344,717 | corrupted 0 | sequence gaps 0 (missing 0) | rewinds 0 | timestamp anomalies 0 | dropped while paused 0 (0 B)
 ```
 
 ### producer
@@ -100,6 +103,7 @@ Options:
   -n, --shm-name <name>      POSIX shared memory object name (default: /pc-ring)
   -r, --ring-size <bytes>    Ring buffer capacity (rounded up to a power of two) (default: 64M)
   -g, --generator <kind>     Payload generator: random | sequential (default: random)
+  -k, --checksum <algo>      Checksum: crc32c (CPU-accelerated where available) | crc32 (default: crc32c)
       --seed <n>             Seed for the random generator (default: 1)
       --rate <pps>           Packets per second, 0 = as fast as possible (default: 0)
   -c, --count <n>            Stop after this many packets, 0 = unlimited (default: 0)
@@ -196,10 +200,11 @@ Every record in the ring is a fixed 32-byte header followed by the payload:
 | Offset | Size | Field          | Content |
 |-------:|-----:|----------------|---------|
 | 0      | 4    | `magic`        | `"PCKT"` |
-| 4      | 2    | `version`      | 1 |
+| 4      | 1    | `version`      | 2 |
+| 5      | 1    | `checksum_kind`| 1 = CRC-32 (IEEE), 2 = CRC-32C (Castagnoli) |
 | 6      | 2    | `header_size`  | 32 |
 | 8      | 4    | `payload_size` | bytes of payload that follow the header |
-| 12     | 4    | `checksum`     | CRC-32 (IEEE) over the whole packet with this field zeroed |
+| 12     | 4    | `checksum`     | CRC over the whole packet with this field zeroed, algorithm per `checksum_kind` |
 | 16     | 8    | `sequence`     | 0, 1, 2, ... per producer run |
 | 24     | 8    | `timestamp_ns` | `CLOCK_REALTIME` nanoseconds at creation |
 
@@ -213,8 +218,19 @@ corrupted; the remaining checks are anomalies and do not affect the count of
 received packets. The timestamp also yields the end-to-end latency reported
 each interval.
 
-CRC-32 uses the slice-by-8 table technique (roughly 1 GB/s per core), so it
-is the dominant per-byte cost on both sides, not the transport.
+Two checksum algorithms are available (`--checksum` on the producer; the
+consumer reads the choice from each header through `ChecksumRegistry`):
+
+* **CRC-32C** (default) uses the CPU's CRC instructions when they are present
+  at run time (SSE4.2 on x86, the CRC extension on ARMv8) and falls back to a
+  table otherwise. Both paths give identical results, which the unit test
+  verifies against a bit-by-bit reference. The hardware path runs at about
+  6 GiB/s per core on the benchmark machine.
+* **CRC-32** (IEEE) is the classic polynomial, computed with the slice-by-8
+  table technique at about 1.6 GiB/s per core.
+
+The checksum is the dominant per-byte cost on both sides, not the transport;
+see Measurements.
 
 ### Lifecycle
 
@@ -280,7 +296,7 @@ application object through interfaces.
 
 ```
 common/include/pc/       shared library "pc_common"
-  checksum.hpp           IChecksum, Crc32
+  checksum.hpp           IChecksum, Crc32, Crc32c (hardware/software), ChecksumRegistry
   packet.hpp             PacketHeader, seal_packet / read_header / packet_checksum
   shm_region.hpp         MirroredShmRegion: POSIX shm object with a mirrored mapping
   ring_buffer.hpp        RingControl, RingProducer, RingConsumer (SPSC queue)
@@ -314,8 +330,29 @@ tests/                   unit tests (CRC, ring buffer, validator, CLI) and integ
 
 ## Measurements
 
-Release build, both processes on one machine (16-core Linux laptop, GCC 13.3,
-30 s runs, 64 MiB ring, random payload; reproducible with `scripts/bench.sh`):
+Release build, both processes on one machine: Intel Core i7-11850H (8 cores /
+16 threads, 2.5 GHz, 24 MiB L3), 32 GiB RAM, Linux 6.14, GCC 13.3. 30 s runs,
+64 MiB ring, random payload; reproducible with `scripts/bench.sh`. Throughput
+counts header + payload bytes.
+
+### CRC-32C, hardware (`--checksum crc32c`, the default)
+
+| Payload | Packets/s | Throughput | Latency avg / max | Packets in 30 s |
+|--------:|----------:|-----------:|------------------:|----------------:|
+| 16 B    | 4,398,000 | 201 MiB/s  | 33 µs / 6.0 ms    | 131,501,693 |
+| 64 B    | 3,775,000 | 346 MiB/s  | 2.3 µs / 712 µs   | 112,874,913 |
+| 256 B   | 3,097,000 | 851 MiB/s  | 0.9 µs / 1.0 ms   | 92,586,235 |
+| 1 KiB   | 1,308,000 | 1.29 GiB/s | 0.8 µs / 1.1 ms   | 39,095,090 |
+| 4 KiB   |   547,000 | 2.10 GiB/s | 1.2 µs / 753 µs   | 16,344,717 |
+| 16 KiB  |   156,000 | 2.39 GiB/s | 6.0 µs / 768 µs   | 4,672,948 |
+| 64 KiB  |    41,400 | 2.53 GiB/s | 59 µs / 856 µs    | 1,236,757 |
+| 256 KiB |    10,500 | 2.57 GiB/s | 89 µs / 774 µs    | 315,238 |
+| 512 KiB |     5,280 | 2.58 GiB/s | 130 µs / 970 µs   | 157,898 |
+| 1 MiB   |     2,570 | 2.51 GiB/s | 243 µs / 1.2 ms   | 76,979 |
+| 2 MiB   |     1,280 | 2.50 GiB/s | 473 µs / 1.5 ms   | 38,318 |
+| 4 MiB   |       633 | 2.48 GiB/s | 940 µs / 2.0 ms   | 18,955 |
+
+### CRC-32, software slice-by-8 (`--checksum crc32`)
 
 | Payload | Packets/s | Throughput | Latency avg / max | Packets in 30 s |
 |--------:|----------:|-----------:|------------------:|----------------:|
@@ -338,10 +375,14 @@ the moment the consumer finished validating the packet, so for large packets
 it includes generating, hashing and verifying the payload.
 
 Small packets are bound by per-packet overhead (about 200 ns across both
-processes); large packets are bound by the CRC-32 computation (1.6 GiB/s per
-core here), not by the transport. The ring stays nearly empty (`ring 0%`)
-because the consumer keeps up. Ring size has little effect; pinning both
-processes to the same CPU core roughly halves the throughput.
+processes), so the checksum makes little difference there. Large packets are
+bound by per-byte work: with the software CRC-32 (1.6 GiB/s per core) the
+stream plateaus at about 1.2 GiB/s; the CRC-32C instruction (6 GiB/s per
+core) lifts that to about 2.5 GiB/s, where the producer becomes bound by
+generating random payload bytes (the cheaper sequential generator reaches
+3.5 GiB/s). The ring stays nearly empty (`ring 0%`) because the consumer
+keeps up. Ring size has little effect; pinning both processes to the same
+CPU core roughly halves the throughput.
 
 ## Limitations and assumptions
 
@@ -356,7 +397,8 @@ processes to the same CPU core roughly halves the throughput.
 * If a process is killed with `SIGKILL` while reading the keyboard, the
   terminal stays in non-canonical mode until `reset` is run (orderly stops,
   including Ctrl-C, restore it).
-* Developed and tested on Linux. The code only uses POSIX interfaces
+* Developed and tested on Linux/x86-64. The code only uses POSIX interfaces
   (`shm_open`, `mmap` with `MAP_FIXED` into a reserved range, `sigwait`,
   `termios`, `poll`) and should build on other POSIX systems, but has not
-  been run there.
+  been run there; in particular the ARMv8 hardware CRC path compiles from
+  the same source but was not exercised on ARM hardware.
