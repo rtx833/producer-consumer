@@ -29,9 +29,13 @@ void RandomPayloadGenerator::fill(std::span<std::uint8_t> payload) noexcept {
 }
 
 void SequentialPayloadGenerator::fill(std::span<std::uint8_t> payload) noexcept {
+    // Count in a local: with the member itself the compiler must assume the
+    // destination may alias `this` and cannot vectorise the loop.
+    std::uint8_t value = next_;
     for (std::uint8_t& byte : payload) {
-        byte = next_++;
+        byte = value++;
     }
+    next_ = value;
 }
 
 std::unique_ptr<IPayloadGenerator> make_payload_generator(std::string_view kind, std::uint64_t seed) {
