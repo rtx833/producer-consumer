@@ -5,6 +5,7 @@ add_library(pc_common STATIC
     src/packet.cpp
     src/ring_buffer.cpp
     src/shm_region.cpp
+    src/shm_transport.cpp
 )
 target_include_directories(pc_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(pc_common
