@@ -3,6 +3,7 @@ add_library(pc_common STATIC
     src/checksum.cpp
     src/cli.cpp
     src/packet.cpp
+    src/ring_buffer.cpp
     src/shm_region.cpp
 )
 target_include_directories(pc_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)

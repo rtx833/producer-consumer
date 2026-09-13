@@ -10,5 +10,6 @@ function(pc_add_unit_test name)
 endfunction()
 
 pc_add_unit_test(test_crc32)
+pc_add_unit_test(test_ring_buffer)
 pc_add_unit_test(test_cli)
 
